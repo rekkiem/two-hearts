@@ -1,0 +1,88 @@
+version: '3.9'
+name: two-hearts
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: twohearts
+      POSTGRES_USER: twohearts
+      POSTGRES_PASSWORD: twohearts123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U twohearts -d twohearts"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: twohearts
+      MINIO_ROOT_PASSWORD: twohearts123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 twohearts twohearts123;
+      mc mb --ignore-existing local/photos;
+      mc anonymous set public local/photos;
+      echo 'MinIO bucket ready';
+      "
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "jdbc:postgresql://postgres:5432/twohearts"
+      DATABASE_USER: "twohearts"
+      DATABASE_PASSWORD: "twohearts123"
+      JWT_SECRET: "two-hearts-secret-change-in-production-32chars"
+      MAIL_HOST: "mailhog"
+      MAIL_PORT: "1025"
+      MAIL_FROM: "noreply@twohearts.app"
+      MINIO_ENDPOINT: "http://minio:9000"
+      MINIO_ACCESS_KEY: "twohearts"
+      MINIO_SECRET_KEY: "twohearts123"
+      MINIO_BUCKET: "photos"
+      APP_BASE_URL: "http://localhost:8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  minio_data:
