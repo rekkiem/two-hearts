@@ -9,7 +9,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.LocalDate
 import java.time.Period
-import java.time.OffsetDateTime
+import kotlinx.datetime.Clock
 import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
@@ -65,8 +65,8 @@ class ProfileService(
                 it[prefGenders]          = gendersToDb(req.prefGenders)
                 it[prefMaxDistKm]        = req.prefMaxDistKm
                 it[profileComplete]      = isComplete
-                it[createdAt]            = OffsetDateTime.now()
-                it[updatedAt]            = OffsetDateTime.now()
+                it[createdAt]            = Clock.System.now()
+                it[updatedAt]            = Clock.System.now()
             }
         } else {
             ProfilesTable.update({ ProfilesTable.userId eq uid }) {
@@ -84,7 +84,7 @@ class ProfileService(
                 it[prefGenders]          = gendersToDb(req.prefGenders)
                 it[prefMaxDistKm]        = req.prefMaxDistKm
                 it[profileComplete]      = isComplete
-                it[updatedAt]            = OffsetDateTime.now()
+                it[updatedAt]            = Clock.System.now()
             }
         }
 
@@ -138,7 +138,7 @@ class ProfileService(
     // ---- Row mappers ----
 
     private fun ResultRow.toResponse(): ProfileResponse = ProfileResponse(
-        userId           = this[ProfilesTable.userId].value.toString(),
+        userId           = this[ProfilesTable.userId].toString(),
         displayName      = this[ProfilesTable.displayName],
         birthDate        = this[ProfilesTable.birthDate],
         age              = calculateAge(this[ProfilesTable.birthDate]),
@@ -156,7 +156,7 @@ class ProfileService(
     )
 
     private fun ResultRow.toData(): ProfileData = ProfileData(
-        userId           = this[ProfilesTable.userId].value.toString(),
+        userId           = this[ProfilesTable.userId].toString(),
         displayName      = this[ProfilesTable.displayName],
         birthDate        = this[ProfilesTable.birthDate],
         genderIdentity   = this[ProfilesTable.genderIdentity],

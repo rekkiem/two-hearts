@@ -104,18 +104,15 @@ class EmbeddingService {
         return FloatArray(v.size) { v[it] / norm }
     }
 
-    // Murmur64-inspired hash for good distribution
+    // Simple FNV-1a 64-bit hash (stable and fast for our use)
     private fun murmur64(key: String): Long {
-        var h = 0xDEADBEEFCAFEBABEL
-        key.forEach { c ->
-            h = h xor c.code.toLong()
-            h *= -0x61C8864680B583EBL   // murmur mixing constant
-            h = h xor (h ushr 33)
+        var h = 0xcbf29ce484222325L
+        val prime = 0x100000001b3L
+        val bytes = key.encodeToByteArray()
+        for (b in bytes) {
+            h = h xor (b.toLong() and 0xFFL)
+            h *= prime
         }
-        h *= -0xFF51AFD7ED558CCDL
-        h = h xor (h ushr 33)
-        h *= -0xC4CEB9FE1A85EC53L
-        h = h xor (h ushr 33)
         return h
     }
 }

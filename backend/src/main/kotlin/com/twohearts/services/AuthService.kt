@@ -8,6 +8,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.server.config.*
 import kotlinx.datetime.*
 import kotlinx.datetime.TimeZone
+import kotlin.time.Duration.Companion.minutes
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.kotlin.datetime.CurrentTimestampWithTimeZone
@@ -54,9 +55,8 @@ class AuthService(
             MagicLinksTable.insert {
                 it[userId]         = UUID.fromString(user.id)
                 it[this.tokenHash] = tokenHash
-                it[this.expiresAt] = expiresAt.toLocalDateTime(TimeZone.UTC).toJavaLocalDateTime()
-                    .atOffset(java.time.ZoneOffset.UTC)
-                it[createdAt]      = java.time.OffsetDateTime.now()
+                it[this.expiresAt] = expiresAt
+                it[createdAt]      = Clock.System.now()
             }
         }
 
@@ -76,7 +76,7 @@ class AuthService(
                 .singleOrNull()
                 ?: throw IllegalArgumentException("Invalid or expired token")
 
-            val expiresAt = row[MagicLinksTable.expiresAt].toInstant()
+            val expiresAt = row[MagicLinksTable.expiresAt]
             val usedAt    = row[MagicLinksTable.usedAt]
             val isActive  = row[UsersTable.isActive]
 
@@ -86,7 +86,7 @@ class AuthService(
 
             // Mark as used (atomic single-use)
             MagicLinksTable.update({ MagicLinksTable.tokenHash eq tokenHash }) {
-                it[this.usedAt] = java.time.OffsetDateTime.now()
+                it[this.usedAt] = Clock.System.now()
             }
 
             row[MagicLinksTable.userId].value.toString() to row[UsersTable.email]
@@ -107,7 +107,7 @@ class AuthService(
                 .singleOrNull()
                 ?: throw IllegalArgumentException("Invalid refresh token")
 
-            val expiresAt  = row[RefreshTokensTable.expiresAt].toInstant()
+            val expiresAt  = row[RefreshTokensTable.expiresAt]
             val revokedAt  = row[RefreshTokensTable.revokedAt]
             val storedDev  = row[RefreshTokensTable.deviceId]
 
@@ -122,7 +122,7 @@ class AuthService(
 
             // Revoke old token
             RefreshTokensTable.update({ RefreshTokensTable.tokenHash eq tokenHash }) {
-                it[revokedAt] = java.time.OffsetDateTime.now()
+                it[revokedAt] = Clock.System.now()
             }
 
             row[RefreshTokensTable.userId].value.toString()
@@ -156,8 +156,8 @@ class AuthService(
         val id = UsersTable.insertAndGetId {
             it[this.email]    = email
             it[isActive]      = true
-            it[createdAt]     = java.time.OffsetDateTime.now()
-            it[updatedAt]     = java.time.OffsetDateTime.now()
+            it[createdAt]     = Clock.System.now()
+            it[updatedAt]     = Clock.System.now()
         }
         return ActiveUser(id = id.value.toString(), isActive = true)
     }
@@ -179,14 +179,14 @@ class AuthService(
         val rawRefresh = generateToken(64)
         val refreshHash = sha256(rawRefresh)
 
+        val refreshExpiryInstant = kotlinx.datetime.Instant.fromEpochMilliseconds(refreshExpiry.time)
         transaction {
             RefreshTokensTable.insert {
                 it[this.userId]    = UUID.fromString(userId)
                 it[tokenHash]      = refreshHash
                 it[this.deviceId]  = deviceId
-                it[expiresAt]      = refreshExpiry.toInstant()
-                    .atOffset(java.time.ZoneOffset.UTC)
-                it[createdAt]      = java.time.OffsetDateTime.now()
+                it[expiresAt]      = refreshExpiryInstant
+                it[createdAt]      = Clock.System.now()
             }
         }
 
@@ -214,13 +214,8 @@ private data class ActiveUser(val id: String, val isActive: Boolean)
 object RevocationService {
     fun revokeAllForUser(userId: String) = transaction {
         RefreshTokensTable.update({ RefreshTokensTable.userId eq UUID.fromString(userId) }) {
-            it[revokedAt] = java.time.OffsetDateTime.now()
+            it[revokedAt] = Clock.System.now()
         }
     }
 }
 
-// Extension: convert OffsetDateTime to Instant
-private fun java.time.OffsetDateTime.toInstant(): Instant =
-    Instant.fromEpochSeconds(toEpochSecond(), nano.toLong())
-private fun Instant.toLocalDateTime(tz: TimeZone): LocalDateTime =
-    toLocalDateTime(tz)
