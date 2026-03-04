@@ -114,7 +114,10 @@ class ProfileService(
     private fun updateEmbeddingInternal(userId: String, bio: String?, occupation: String?, intentAnswer: String?) {
         val vec    = embeddingService.embedProfile(bio, occupation, intentAnswer)
         val vecStr = embeddingService.floatArrayToVector(vec)
-        exec("UPDATE profiles SET embedding = '$vecStr'::vector WHERE user_id = '$userId'")
+        // FIX :117 — exec() requiere contexto de transacción explícito
+        transaction {
+            exec("UPDATE profiles SET embedding = '$vecStr'::vector WHERE user_id = '$userId'")
+        }
         logger.debug { "Embedding updated for $userId" }
     }
 
@@ -125,7 +128,7 @@ class ProfileService(
     }
 
     private fun ResultRow.toResponse() = ProfileResponse(
-        userId           = this[ProfilesTable.userId].value.toString(),
+        userId           = this[ProfilesTable.userId].toString(),
         displayName      = this[ProfilesTable.displayName],
         birthDate        = this[ProfilesTable.birthDate],
         age              = calculateAge(this[ProfilesTable.birthDate]),
@@ -143,7 +146,7 @@ class ProfileService(
     )
 
     private fun ResultRow.toData() = ProfileData(
-        userId           = this[ProfilesTable.userId].value.toString(),
+        userId           = this[ProfilesTable.userId].toString(),
         displayName      = this[ProfilesTable.displayName],
         birthDate        = this[ProfilesTable.birthDate],
         genderIdentity   = this[ProfilesTable.genderIdentity],
