@@ -1,5 +1,6 @@
 package com.twohearts.services
 
+import com.twohearts.NotFoundException
 import com.twohearts.database.ProfilesTable
 import com.twohearts.models.CreateProfileRequest
 import com.twohearts.models.ProfileResponse
@@ -8,28 +9,28 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.time.Period
-import kotlinx.datetime.Clock
 import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
 
+// FIX: Explicit column list to avoid querying the unmapped 'embedding' vector column
+private val PROFILE_COLS = listOf(
+    ProfilesTable.userId, ProfilesTable.displayName, ProfilesTable.birthDate,
+    ProfilesTable.genderIdentity, ProfilesTable.bio, ProfilesTable.occupation,
+    ProfilesTable.relationshipIntent, ProfilesTable.lat, ProfilesTable.lng,
+    ProfilesTable.city, ProfilesTable.photoUrl, ProfilesTable.prefMinAge,
+    ProfilesTable.prefMaxAge, ProfilesTable.prefGenders, ProfilesTable.prefMaxDistKm,
+    ProfilesTable.profileComplete, ProfilesTable.createdAt, ProfilesTable.updatedAt
+)
+
 data class ProfileData(
-    val userId: String,
-    val displayName: String,
-    val birthDate: String,
-    val genderIdentity: String,
-    val bio: String?,
-    val occupation: String?,
-    val relationshipIntent: String,
-    val lat: Double?,
-    val lng: Double?,
-    val city: String?,
-    val photoUrl: String?,
-    val prefMinAge: Int,
-    val prefMaxAge: Int,
-    val prefGenders: List<String>,
-    val prefMaxDistKm: Int,
+    val userId: String, val displayName: String, val birthDate: String,
+    val genderIdentity: String, val bio: String?, val occupation: String?,
+    val relationshipIntent: String, val lat: Double?, val lng: Double?,
+    val city: String?, val photoUrl: String?, val prefMinAge: Int,
+    val prefMaxAge: Int, val prefGenders: List<String>, val prefMaxDistKm: Int,
     val profileComplete: Boolean
 )
 
@@ -40,69 +41,61 @@ class ProfileService(
 
     fun upsertProfile(userId: String, req: CreateProfileRequest): ProfileResponse = transaction {
         val uid = UUID.fromString(userId)
-        val existing = ProfilesTable.select(ProfilesTable.userId)
-            .where { ProfilesTable.userId eq uid }
-            .singleOrNull()
+        val isComplete = req.displayName.isNotBlank() && req.birthDate.isNotBlank() && req.genderIdentity.isNotBlank()
+        val exists = ProfilesTable.select(ProfilesTable.userId).where { ProfilesTable.userId eq uid }.any()
 
-        val isComplete = req.displayName.isNotBlank() &&
-                req.birthDate.isNotBlank() &&
-                req.genderIdentity.isNotBlank()
-
-        if (existing == null) {
+        if (!exists) {
             ProfilesTable.insert {
-                it[this.userId]          = uid
-                it[displayName]          = req.displayName
-                it[birthDate]            = req.birthDate
-                it[genderIdentity]       = req.genderIdentity
-                it[bio]                  = req.bio
-                it[occupation]           = req.occupation
-                it[relationshipIntent]   = req.relationshipIntent
-                it[lat]                  = req.lat
-                it[lng]                  = req.lng
-                it[city]                 = req.city
-                it[prefMinAge]           = req.prefMinAge
-                it[prefMaxAge]           = req.prefMaxAge
-                it[prefGenders]          = gendersToDb(req.prefGenders)
-                it[prefMaxDistKm]        = req.prefMaxDistKm
-                it[profileComplete]      = isComplete
-                it[createdAt]            = Clock.System.now()
-                it[updatedAt]            = Clock.System.now()
+                it[this.userId]        = uid
+                it[displayName]        = req.displayName
+                it[birthDate]          = req.birthDate
+                it[genderIdentity]     = req.genderIdentity
+                it[bio]                = req.bio
+                it[occupation]         = req.occupation
+                it[relationshipIntent] = req.relationshipIntent
+                it[lat]                = req.lat
+                it[lng]                = req.lng
+                it[city]               = req.city
+                it[prefMinAge]         = req.prefMinAge
+                it[prefMaxAge]         = req.prefMaxAge
+                it[prefGenders]        = gendersToDb(req.prefGenders)
+                it[prefMaxDistKm]      = req.prefMaxDistKm
+                it[profileComplete]    = isComplete
+                it[createdAt]          = OffsetDateTime.now()
+                it[updatedAt]          = OffsetDateTime.now()
             }
         } else {
             ProfilesTable.update({ ProfilesTable.userId eq uid }) {
-                it[displayName]          = req.displayName
-                it[birthDate]            = req.birthDate
-                it[genderIdentity]       = req.genderIdentity
-                it[bio]                  = req.bio
-                it[occupation]           = req.occupation
-                it[relationshipIntent]   = req.relationshipIntent
-                it[lat]                  = req.lat
-                it[lng]                  = req.lng
-                it[city]                 = req.city
-                it[prefMinAge]           = req.prefMinAge
-                it[prefMaxAge]           = req.prefMaxAge
-                it[prefGenders]          = gendersToDb(req.prefGenders)
-                it[prefMaxDistKm]        = req.prefMaxDistKm
-                it[profileComplete]      = isComplete
-                it[updatedAt]            = Clock.System.now()
+                it[displayName]        = req.displayName
+                it[birthDate]          = req.birthDate
+                it[genderIdentity]     = req.genderIdentity
+                it[bio]                = req.bio
+                it[occupation]         = req.occupation
+                it[relationshipIntent] = req.relationshipIntent
+                it[lat]                = req.lat
+                it[lng]                = req.lng
+                it[city]               = req.city
+                it[prefMinAge]         = req.prefMinAge
+                it[prefMaxAge]         = req.prefMaxAge
+                it[prefGenders]        = gendersToDb(req.prefGenders)
+                it[prefMaxDistKm]      = req.prefMaxDistKm
+                it[profileComplete]    = isComplete
+                it[updatedAt]          = OffsetDateTime.now()
             }
         }
 
-        // Update embedding via raw SQL after upsert
-        updateEmbedding(userId, req.bio, req.occupation, null)
-
+        updateEmbeddingInternal(userId, req.bio, req.occupation, null)
         getProfileOrThrow(userId)
     }
 
     fun getProfile(userId: String): ProfileResponse? = transaction {
-        ProfilesTable.select(ProfilesTable.columns)
+        ProfilesTable.select(PROFILE_COLS)
             .where { ProfilesTable.userId eq UUID.fromString(userId) }
-            .singleOrNull()
-            ?.toResponse()
+            .singleOrNull()?.toResponse()
     }
 
     fun getProfileOrThrow(userId: String): ProfileResponse =
-        getProfile(userId) ?: throw com.twohearts.NotFoundException("Profile not found")
+        getProfile(userId) ?: throw NotFoundException("Profile not found")
 
     fun updatePhoto(userId: String, bytes: ByteArray, contentType: String): String {
         val url = minioService.uploadPhoto(userId, bytes, contentType)
@@ -115,30 +108,24 @@ class ProfileService(
         return url
     }
 
-    /**
-     * Update profile embedding from bio + occupation + optional recent intent answer.
-     * Uses raw SQL because pgvector column type isn't mapped in Exposed.
-     */
-    fun updateEmbedding(userId: String, bio: String?, occupation: String?, intentAnswer: String?) {
-        val vec = embeddingService.embedProfile(bio, occupation, intentAnswer)
+    fun updateEmbedding(userId: String, bio: String?, occupation: String?, intentAnswer: String?) =
+        transaction { updateEmbeddingInternal(userId, bio, occupation, intentAnswer) }
+
+    private fun updateEmbeddingInternal(userId: String, bio: String?, occupation: String?, intentAnswer: String?) {
+        val vec    = embeddingService.embedProfile(bio, occupation, intentAnswer)
         val vecStr = embeddingService.floatArrayToVector(vec)
-        transaction {
-            exec("UPDATE profiles SET embedding = '$vecStr'::vector WHERE user_id = '$userId'")
-        }
-        logger.debug { "Embedding updated for user $userId" }
+        exec("UPDATE profiles SET embedding = '$vecStr'::vector WHERE user_id = '$userId'")
+        logger.debug { "Embedding updated for $userId" }
     }
 
     fun getPublicProfile(userId: String): ProfileData? = transaction {
-        ProfilesTable.select(ProfilesTable.columns)
+        ProfilesTable.select(PROFILE_COLS)
             .where { ProfilesTable.userId eq UUID.fromString(userId) }
-            .singleOrNull()
-            ?.toData()
+            .singleOrNull()?.toData()
     }
 
-    // ---- Row mappers ----
-
-    private fun ResultRow.toResponse(): ProfileResponse = ProfileResponse(
-        userId           = this[ProfilesTable.userId].toString(),
+    private fun ResultRow.toResponse() = ProfileResponse(
+        userId           = this[ProfilesTable.userId].value.toString(),
         displayName      = this[ProfilesTable.displayName],
         birthDate        = this[ProfilesTable.birthDate],
         age              = calculateAge(this[ProfilesTable.birthDate]),
@@ -155,8 +142,8 @@ class ProfileService(
         profileComplete  = this[ProfilesTable.profileComplete]
     )
 
-    private fun ResultRow.toData(): ProfileData = ProfileData(
-        userId           = this[ProfilesTable.userId].toString(),
+    private fun ResultRow.toData() = ProfileData(
+        userId           = this[ProfilesTable.userId].value.toString(),
         displayName      = this[ProfilesTable.displayName],
         birthDate        = this[ProfilesTable.birthDate],
         genderIdentity   = this[ProfilesTable.genderIdentity],
@@ -176,8 +163,7 @@ class ProfileService(
 
     companion object {
         fun calculateAge(birthDateStr: String): Int = try {
-            val bd = LocalDate.parse(birthDateStr)
-            Period.between(bd, LocalDate.now()).years
+            Period.between(LocalDate.parse(birthDateStr), LocalDate.now()).years
         } catch (_: Exception) { 0 }
 
         fun gendersToDb(genders: List<String>): String =

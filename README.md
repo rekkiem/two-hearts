@@ -1,4 +1,4 @@
-# Two Hearts 💕
+# TwoHearts MVP 💕
 
 A fully functional open-source dating app — no swipes, no infinite scroll, just meaningful connections.
 
@@ -24,8 +24,8 @@ A fully functional open-source dating app — no swipes, no infinite scroll, jus
 ### 1. Clone and start everything
 
 ```bash
-git clone https://github.com/your-org/two-hearts
-cd two-hearts
+git clone https://github.com/your-org/twohearts-mvp
+cd twohearts-mvp
 
 # Start all services (builds backend Docker image on first run)
 docker compose up --build
@@ -264,7 +264,7 @@ Score = `0.5 × semantic_similarity + 0.3 × intent_similarity + 0.2 × geo_scor
 ## Project Structure
 
 ```
-two-hearts/
+twohearts-mvp/
 ├── docker-compose.yml              ← Run everything with one command
 ├── backend/
 │   ├── Dockerfile

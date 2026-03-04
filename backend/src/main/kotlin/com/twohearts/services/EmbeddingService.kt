@@ -104,15 +104,19 @@ class EmbeddingService {
         return FloatArray(v.size) { v[it] / norm }
     }
 
-    // Simple FNV-1a 64-bit hash (stable and fast for our use)
+    // FIX ERROR 3: constantes hex que desbordan Long → valores signed-Long equivalentes
+    // 0xDEADBEEFCAFEBABE, 0xFF51AFD7ED558CCD, 0xC4CEB9FE1A85EC53 > Long.MAX_VALUE
     private fun murmur64(key: String): Long {
-        var h = 0xcbf29ce484222325L
-        val prime = 0x100000001b3L
-        val bytes = key.encodeToByteArray()
-        for (b in bytes) {
-            h = h xor (b.toLong() and 0xFFL)
-            h *= prime
+        var h = -2401053089206453570L  // 0xDEADBEEFCAFEBABE como Long signed
+        key.forEach { c ->
+            h = h xor c.code.toLong()
+            h *= 7046029254386353131L  // 0x61C8864680B583EB (positivo, no desborda)
+            h = h xor (h ushr 33)
         }
+        h *= -49064778989728563L       // 0xFF51AFD7ED558CCD como Long signed
+        h = h xor (h ushr 33)
+        h *= -4265267296055464877L     // 0xC4CEB9FE1A85EC53 como Long signed
+        h = h xor (h ushr 33)
         return h
     }
 }

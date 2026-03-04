@@ -14,7 +14,6 @@ application {
 
 val ktorVersion = "3.0.3"
 val exposedVersion = "0.57.0"
-val kotlinxDatetimeVersion = "0.6.1"
 
 repositories {
     mavenCentral()
@@ -37,13 +36,13 @@ dependencies {
     // Serialization
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-datetime:$kotlinxDatetimeVersion")
+    // kotlinx-datetime eliminado: toda la app usa java.time (consistent con exposed-java-time)
 
     // Database - Exposed ORM
     implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
     implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
     implementation("org.jetbrains.exposed:exposed-dao:$exposedVersion")
-    implementation("org.jetbrains.exposed:exposed-kotlin-datetime:$exposedVersion")
+    implementation("org.jetbrains.exposed:exposed-java-time:$exposedVersion")
     implementation("org.postgresql:postgresql:42.7.4")
 
     // Connection pooling

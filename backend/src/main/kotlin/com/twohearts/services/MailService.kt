@@ -58,7 +58,7 @@ class MailService(config: ApplicationConfig) {
         try {
             val msg = MimeMessage(session).apply {
                 setFrom(InternetAddress(from))
-                setRecipients(Message.RecipientType.TO, InternetAddress.parse(email))
+                setRecipients(Message.RecipientType.TO, arrayOf<jakarta.mail.Address>(InternetAddress(email)))
                 subject = "Your TwoHearts sign-in link"
                 setContent(html, "text/html; charset=utf-8")
                 sentDate = Date()

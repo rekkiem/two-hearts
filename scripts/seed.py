@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Two Hearts — Seed Script
+TwoHearts MVP — Seed Script
 Creates dummy users, profiles, and daily intents for testing.
 
 Usage:
@@ -210,7 +210,7 @@ def main():
         sys.exit(1)
 
     print(f"\n{'='*50}")
-    print(f"Two Hearts Seed — {len(USERS)} users")
+    print(f"TwoHearts MVP Seed — {len(USERS)} users")
     print(f"{'='*50}")
 
     seeded = []

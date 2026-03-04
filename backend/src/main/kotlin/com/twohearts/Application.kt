@@ -15,7 +15,6 @@ import io.ktor.server.netty.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.plugins.statuspages.*
-import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
@@ -33,42 +32,34 @@ fun Application.module() {
     val jwtSecret  = environment.config.property("jwt.secret").getString()
     val jwtIssuer  = environment.config.property("jwt.issuer").getString()
 
-    // ---- Database ----
     DatabaseFactory.init(dbUrl, dbUser, dbPassword)
     logger.info { "Database connected and migrations applied" }
 
-    // ---- Services ----
-    val mailService     = MailService(environment.config)
-    val minioService    = MinioService(environment.config)
+    val mailService      = MailService(environment.config)
+    val minioService     = MinioService(environment.config)
     val embeddingService = EmbeddingService()
-    val authService     = AuthService(environment.config, mailService)
-    val profileService  = ProfileService(embeddingService, minioService)
-    val matchingService = MatchingService(embeddingService)
-    val chatService     = ChatService()
+    val authService      = AuthService(environment.config, mailService)
+    val profileService   = ProfileService(embeddingService, minioService)
+    val matchingService  = MatchingService(embeddingService)
+    val chatService      = ChatService()
+    val videoService     = VideoSignalingService()
 
-    // ---- Plugins ----
     install(ContentNegotiation) {
-        json(Json {
-            ignoreUnknownKeys = true
-            isLenient = false
-            prettyPrint = false
-        })
+        json(Json { ignoreUnknownKeys = true; isLenient = true; prettyPrint = false })
     }
 
+    // FIX: Ktor 3 requires kotlin.time.Duration, NOT java.time.Duration
     install(WebSockets) {
-        pingPeriod = 30.seconds
-        timeout = 60.seconds
-        maxFrameSize = Long.MAX_VALUE
-        masking = false
+        pingPeriod   = 30.seconds
+        timeout      = 60.seconds
+        maxFrameSize = 65536L
+        masking      = false
     }
 
     install(CORS) {
-        allowMethod(HttpMethod.Options)
-        allowMethod(HttpMethod.Get)
-        allowMethod(HttpMethod.Post)
-        allowMethod(HttpMethod.Put)
-        allowMethod(HttpMethod.Delete)
-        allowMethod(HttpMethod.Patch)
+        allowMethod(HttpMethod.Options); allowMethod(HttpMethod.Get)
+        allowMethod(HttpMethod.Post);    allowMethod(HttpMethod.Put)
+        allowMethod(HttpMethod.Delete);  allowMethod(HttpMethod.Patch)
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
         anyHost()
@@ -77,20 +68,14 @@ fun Application.module() {
     install(Authentication) {
         jwt("auth-jwt") {
             realm = "twohearts"
-            verifier(
-                JWT.require(Algorithm.HMAC256(jwtSecret))
-                    .withIssuer(jwtIssuer)
-                    .build()
-            )
+            verifier(JWT.require(Algorithm.HMAC256(jwtSecret)).withIssuer(jwtIssuer).build())
             validate { credential ->
-                val userId = credential.payload.getClaim("sub").asString()
-                if (!userId.isNullOrBlank()) JWTPrincipal(credential.payload) else null
+                credential.payload.getClaim("sub").asString()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { JWTPrincipal(credential.payload) }
             }
             challenge { _, _ ->
-                call.respond(
-                    HttpStatusCode.Unauthorized,
-                    mapOf("error" to "Invalid or expired token")
-                )
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid or expired token"))
             }
         }
     }
@@ -107,33 +92,27 @@ fun Application.module() {
             call.respond(HttpStatusCode.Forbidden, mapOf("error" to (cause.message ?: "Forbidden")))
         }
         exception<Throwable> { call, cause ->
-            logger.error(cause) { "Unhandled error: ${cause.message}" }
-            call.respond(
-                HttpStatusCode.InternalServerError,
-                mapOf("error" to "Internal server error")
-            )
+            logger.error(cause) { "Unhandled: ${cause.message}" }
+            call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Internal server error"))
         }
     }
 
     routing {
-        // Health check (no auth)
         get("/health") {
-            call.respond(mapOf("status" to "ok", "service" to "twohearts-backend"))
+            call.respond(mapOf("status" to "ok", "service" to "twohearts-backend", "version" to "1.1.0"))
         }
-
         route("/api/v1") {
             authRoutes(authService)
-
             authenticate("auth-jwt") {
                 profileRoutes(profileService)
                 matchingRoutes(matchingService)
                 chatRoutes(chatService)
                 intentRoutes(matchingService)
+                videoCallRoutes(videoService)
             }
         }
-
-        // WebSocket - token passed as query param (mobile WebSocket limitation)
-        webSocketRoutes(chatService, jwtSecret, jwtIssuer)
+        webSocketChatRoutes(chatService, jwtSecret, jwtIssuer)
+        webSocketSignalingRoutes(videoService, jwtSecret, jwtIssuer)
     }
 }
 

@@ -288,7 +288,7 @@ class MatchingService(private val embeddingService: EmbeddingService) {
 
         return transaction {
             top3.map { (profile, score, explainer) ->
-                val candidateId = profile[ProfilesTable.userId].value.toString()
+                val candidateId = profile[ProfilesTable.userId].toString()
                 val (aId, bId) = canonicalOrder(userId, candidateId)
                 val matchId = MatchesTable.insertAndGetId {
                     it[userAId]       = UUID.fromString(aId)

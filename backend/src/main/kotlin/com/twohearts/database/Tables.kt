@@ -2,7 +2,7 @@ package com.twohearts.database
 
 import org.jetbrains.exposed.dao.id.UUIDTable
 import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.kotlin.datetime.timestampWithTimeZone
+import org.jetbrains.exposed.sql.javatime.timestampWithTimeZone
 
 object UsersTable : UUIDTable("users") {
     val email     = text("email").uniqueIndex()

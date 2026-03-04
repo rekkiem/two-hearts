@@ -1,4 +1,4 @@
--- Two Hearts Database Schema
+-- TwoHearts MVP Database Schema
 -- PostgreSQL 16 + pgvector extension
 
 -- Enable pgvector

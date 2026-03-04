@@ -80,7 +80,7 @@ fun Route.chatRoutes(chatService: ChatService) {
  * WebSocket endpoint: /ws/chat/{conversationId}?token=<jwt>
  * Token passed as query param since Android WebSocket clients can't set headers.
  */
-fun Route.webSocketRoutes(chatService: ChatService, jwtSecret: String, jwtIssuer: String) {
+fun Route.webSocketChatRoutes(chatService: ChatService, jwtSecret: String, jwtIssuer: String) {
     val algorithm = Algorithm.HMAC256(jwtSecret)
 
     webSocket("/ws/chat/{conversationId}") {

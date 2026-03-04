@@ -1,5 +1,5 @@
 version: '3.9'
-name: two-hearts
+name: twohearts-mvp
 
 services:
   postgres:
@@ -63,7 +63,7 @@ services:
       DATABASE_URL: "jdbc:postgresql://postgres:5432/twohearts"
       DATABASE_USER: "twohearts"
       DATABASE_PASSWORD: "twohearts123"
-      JWT_SECRET: "two-hearts-secret-change-in-production-32chars"
+      JWT_SECRET: "twohearts-mvp-secret-change-in-production-32chars"
       MAIL_HOST: "mailhog"
       MAIL_PORT: "1025"
       MAIL_FROM: "noreply@twohearts.app"
